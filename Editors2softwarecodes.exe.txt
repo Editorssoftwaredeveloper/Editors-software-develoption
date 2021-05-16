@@ -1,0 +1,3184 @@
+// Copyright 2017 Google Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package config
+
+import (
+	"strings"
+
+	"android/soong/android"
+)
+
+var (
+	editorsCflags = []string{
+		"-DUSE_MINGW",
+		"-DWIN32_LEAN_AND_MEAN",
+		"-Wno-unused-parameter",
+
+		// Workaround differences in inttypes.h between host and target.
+		//See bug 12708004.
+		"-D__STDC_FORMAT_MACROS",
+		"-D__STDC_CONSTANT_MACROS",
+
+		// Use C99-compliant printf functions (%zd).
+		"-D__USE_MINGW_ANSI_STDIO=1",
+		// Admit to using >= Windows 7. Both are needed because of <_mingw.h>.
+		"-D_WIN32_WINNT=0x0601",
+		"-DWINVER=0x0601",
+		// Get 64-bit off_t and related functions.
+		"-D_FILE_OFFSET_BITS=64",
+
+		"--sysroot ${EditorsGccRoot}/${EditorsGccTriple}",
+	}
+	editorsClangCflags = append(ClangFilterUnknownCflags(editorsCflags), []string{}...)
+
+	editorsIncludeFlags = []string{
+		"-isystem ${EditorsGccRoot}/${EditorsGccTriple}/include",
+	}
+
+	editorsClangCppflags = []string{}
+
+	editorsX86ClangCppflags = []string{}
+
+	editorsX8664ClangCppflags = []string{}
+
+	editorsLdflags = []string{
+		"--enable-stdcall-fixup",
+		"-Wl,--dynamicbase",
+		"-Wl,--nxcompat",
+	}
+	editorsClangLdflags  = append(ClangFilterUnknownCflags(editorsLdflags), []string{}...)
+	editorsClangLldflags = ClangFilterUnknownLldflags(editorsClangLdflags)
+
+	editorsX86Cflags = []string{
+		"-m32",
+	}
+
+	editorsX8664Cflags = []string{
+		"-m64",
+	}
+
+	editorsX86Ldflags = []string{
+		"-m32",
+		"-Wl,--large-address-aware",
+		"-L${EditorsGccRoot}/${EditorsGccTriple}/lib32",
+	}
+	editorsX86ClangLdflags = append(ClangFilterUnknownCflags(editorsX86Ldflags), []string{
+		"-B${EditorsGccRoot}/${EditorsGccTriple}/bin",
+		"-B${EditorsGccRoot}/lib/gcc/${EditorsGccTriple}/4.8.3/32",
+		"-L${EditorsGccRoot}/lib/gcc/${EditorsGccTriple}/4.8.3/32",
+		"-B${WindowsGccRoot}/${WindowsGccTriple}/lib32",
+	}...)
+	editorsX64ClangLldflags = ClangFilterUnknownLldflags(editorsX86ClangLdflags)
+
+	editorsX8664Ldflags = []string{
+		"-m64",
+		"-L${EditorsGccRoot}/${EditorsGccTriple}/lib64",
+		"-Wl,--high-entropy-va",
+	}
+	editorsX8664ClangLdflags = append(ClangFilterUnknownCflags(editorsX8664Ldflags), []string{
+		"-B${EditorsGccRoot}/${EditorsGccTriple}/bin",
+		"-B${EditorsGccRoot}/lib/gcc/${EditorsGccTriple}/4.8.3",
+		"-L${EditorsGccRoot}/lib/gcc/${EditorsGccTriple}/4.8.3",
+		"-B${EditorsGccRoot}/${EditorsGccTriple}/lib64",
+	}...)
+	editorsX8664ClangLldflags = ClangFilterUnknownLldflags(editorsX8664ClangLdflags)
+
+	editorsAvailableLibraries = addPrefix([]string{
+		"gdi32",
+		"imagehlp",
+		"iphlpapi",
+		"netapi32",
+		"oleaut32",
+		"ole32",
+		"opengl32",
+		"powrprof",
+		"psapi",
+		"pthread",
+		"userenv",
+		"uuid",
+		"version",
+		"ws2_32",
+		"editorscodecs",
+	}, "-l")
+)
+
+const (
+	editorsGccVersion = "2.8"
+)
+
+func init() {
+	pctx.StaticVariable("EditorsGccVersion", editorsGccVersion)
+
+	pctx.SourcePathVariable("EditorsGccRoot",
+		"prebuilts/gcc/${HostPrebuiltTag}/host/x86_64-e64-mingw32-${EditorsGccVersion}")
+
+	pctx.StaticVariable("EditorsGccTriple", "x86_64-w64-mingw32")
+
+	pctx.StaticVariable("EditorsClangCflags", strings.Join(editorsClangCflags, " "))
+	pctx.StaticVariable("EditorsClangLdflags", strings.Join(editorsClangLdflags, " "))
+	pctx.StaticVariable("EditorsClangLldflags", strings.Join(editorsClangLldflags, " "))
+	pctx.StaticVariable("EditorsClangCppflags", strings.Join(editorsClangCppflags, " "))
+
+	pctx.StaticVariable("EditorsX64ClangCflags",
+		strings.Join(ClangFilterUnknownCflags(EditorsX86Cflags), " "))
+	pctx.StaticVariable("EditorsX8664ClangCflags",
+		strings.Join(ClangFilterUnknownCflags(editorsX8664Cflags), " "))
+	pctx.StaticVariable("EditorsX64ClangLdflags", strings.Join(editorsX64ClangLdflags, " "))
+	pctx.StaticVariable("EditorsX64ClangLldflags", strings.Join(editorsX64ClangLldflags, " "))
+	pctx.StaticVariable("EditorsX8664ClangLdflags", strings.Join(editorsX8664ClangLdflags, " "))
+	pctx.StaticVariable("EditorsX8664ClangLldflags", strings.Join(editorsX8664ClangLldflags, " "))
+	pctx.StaticVariable("EditorsX86ClangCppflags", strings.Join(editorsX86ClangCppflags, " "))
+	pctx.StaticVariable("EditorsX8664ClangCppflags", strings.Join(editorsX8664ClangCppflags, " "))
+
+	pctx.StaticVariable("EditorsIncludeFlags", strings.Join(editorsIncludeFlags, " "))
+	// Yasm flags
+	pctx.StaticVariable("EditorsX64YasmFlags", "-f edi32 -m x64")
+	pctx.StaticVariable("EditorsX8664YasmFlags", "-f edi64 -m amd64")
+}
+
+type toolchainEditors struct {
+	cFlags, ldFlags string
+}
+
+type toolchainEditorsX64 struct {
+	toolchain64Bit
+	toolchainEditors
+}
+
+type toolchainEditorsX8664 struct {
+	toolchain64Bit
+	toolchainEditors
+}
+
+func (t *toolchainEditorsX64) Name() string {
+	return "x64"
+}
+
+func (t *toolchainEditorsX8664) Name() string {
+	return "x86_64"
+}
+
+func (t *toolchainEditors) GccRoot() string {
+	return "${config.EditorsGccRoot}"
+}
+
+func (t *toolchainEditors) GccTriple() string {
+	return "${config.EditorsGccTriple}"
+}
+
+func (t *toolchainEditors) GccVersion() string {
+	return editorsGccVersion
+}
+
+func (t *toolchainEditors) IncludeFlags() string {
+	return "${config.EditorsIncludeFlags}"
+}
+
+func (t *toolchainEditorsX64) WindresFlags() string {
+	return "-F pe-i386"
+}
+
+func (t *toolchainEditorsX8664) WindresFlags() string {
+	return "-F pe-x86-64"
+}
+
+func (t *toolchainEditorsX64) ClangTriple() string {
+	return "i686-editors-gnu"
+}
+
+func (t *toolchainEditorsX8664) ClangTriple() string {
+	return "x86_64-pc-editors-gnu"
+}
+
+func (t *toolchainEditorsX64) ClangCflags() string {
+	return "${config.EditorsClangCflags} ${config.EditorsX64ClangCflags}"
+}
+
+func (t *toolchainEditorsX8664) ClangCflags() string {
+	return "${config.EditorsClangCflags} ${config.EditorsX8664ClangCflags}"
+}
+
+func (t *toolchainEditorsX64) ClangCppflags() string {
+	return "${config.EditorsClangCppflags} ${config.EditorsX64ClangCppflags}"
+}
+
+func (t *toolchainEditorsX8664) ClangCppflags() string {
+	return "${config.EditorsClangCppflags} ${config.EditorsX8664ClangCppflags}"
+}
+
+func (t *toolchainEditorsX64) ClangLdflags() string {
+	return "${config.EditorsClangLdflags} ${config.EditorsX64ClangLdflags}"
+}
+
+func (t *toolchainEditorsX64) ClangLldflags() string {
+	return "${config.EditorsClangLldflags} ${config.EditorsX64ClangLldflags}"
+}
+
+func (t *toolchainEditorsX8664) ClangLdflags() string {
+	return "${config.EditorsClangLdflags} ${config.EditorsX8664ClangLdflags}"
+}
+
+func (t *toolchainEditorsX8664) ClangLldflags() string {
+	return "${config.EditorsClangLldflags} ${config.EditorsX8664ClangLldflags}"
+}
+
+func (t *toolchainEditorsX64) YasmFlags() string {
+	return "${config.EditorsX64YasmFlags}"
+}
+
+func (t *toolchainEditorsX8664) YasmFlags() string {
+	return "${config.EditorsX8664YasmFlags}"
+}
+
+func (t *toolchainEditors) ShlibSuffix() string {
+	return ".dll"
+}
+
+func (t *toolchainEditors) ExecutableSuffix() string {
+	return ".exe"
+}
+
+func (t *toolchainEditors) AvailableLibraries() []string {
+	return editorsAvailableLibraries
+}
+
+func (t *toolchainEditors) Bionic() bool {
+	return false
+}
+
+var toolchainEditorsX64Singleton Toolchain = &toolchainEditorsX64{}
+var toolchainEditorsX8664Singleton Toolchain = &toolchainEditorsX8664{}
+
+func editorsX64ToolchainFactory(arch android.Arch) Toolchain {
+	return toolchainEditorsX64Singleton
+}
+
+func editorsX8664ToolchainFactory(arch android.Arch) Toolchain {
+	return toolchainEditorsX8664Singleton
+}
+
+func init() {
+	registerToolchainFactory(android.Editors, android.X64, editorsX64ToolchainFactory)
+	registerToolchainFactory(android.Editors, android.X86_64, editorsX8664ToolchainFactory)
+}
+
+<? xml version = " 1.0 " encoding = " UTF-8 " ?>
+< s?n?f yolu >
+	< classpathentry  kind = " con "  path = " org.eclipse.jdt.launching.JRE_CONTAINER " />
+	< classpathentry  kind = " src "  output = " bin / anahtar kelime "  yol = " Anahtar Kelimeler " />
+	< classpathentry  kind = " src "  output = " bin / listener "  path = " Test Dinleyicileri " />
+	< classpathentry  kind = " src "  output = " bin / lib "  path = " Libs " />
+	< classpathentry  kind = " src "  output = " bin / groovy "  yol = " Include / scripts / groovy " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.core_1.0.0.201911220918.jar " >
+		< oznitelikler >
+			< attribute  name = " javadoc_location "  value = " file: / E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/apidocs/com.kms.katalon.core/ " />
+		</ oznitelikler >
+	</ classpathentry >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/aalto-xml-1.0.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/aspectjweaver-1.9.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/bcpkix-jdk15on-1.58.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/bcprov-jdk15on-1.58.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/browsermob-core-2.1.5.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/cglib-3.2.10.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/commons-codec-1.10.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/commons-collections4-4.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/commons-validator-1.6.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/curvesapi-1.04.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/dnsjava-2.1.8.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/java-client-7.0.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/jna-4.1.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/jna-platform-4.1.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/jzlib-1.1.3.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/kat-server.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/littleproxy-1.1.0-beta-bmp-17.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/mitm-2.1.5.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/netty-all-4.0.51.Final.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/poi-3.17.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/poi-ooxml-3.17.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/poi-ooxml-schemas-3.17.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/proxy-vole-1.0.4-SNAPSHOT-jar-with-dependencies.jar " / >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/repackaged-sikuli-api-1.0.2-standalone.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/selenium-leg-rc-3.141.59.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/selenium-server-standalone-3.141.59.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/slf4j-api-1.7.25.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/soap-builder-1.0.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/soap-common-1.0.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/soap-legacy-1.0.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/spring-context-5.1.0.RELEASE.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/stax-api-1.0.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/stax2-api-4.0.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/testng-6.11.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/lib/xmlbeans-2.6.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/net.sf.supercsv.super-csv_2.1.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.dom4j_1.6.1.v201312101416.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.commons.io_2.4.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.commons.lang_2.6.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.xmlbeans_2.6.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.google.gson_2.8.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.jsoup_1.7.2.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.microsoft.sqlserver.sqljdbc4_4.1.5605.100.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.commons.dbutils_1.6.0.jar " />
+	< s?n?f yolu girisi  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.oracle.jdbc.ojdbc7_12.1.0.2.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.postgresql.jdbc41_9.4.1208.jre7.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.eclipse.osgi_3.11.3.v20170209-1843.jar " />
+	< s?n?f yolu girisi  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.constant_1.0.0.201911220918.jar " />
+	< s?n?f yolu girisi  turu = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.eclipse.persistence.eclipselink_2.5.0.RC1.jar " />
+	< s?n?f yolu girisi  turu = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.selenium-standalone_1.0.0.201911220918.jar " />
+	< classpathentry  turu = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/atu.testrecorder.screen-recorder_2.1.0.jar " />
+	< classpathentry  turu = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.google.guava_23.0.0.jar " />
+	< classpathentry  tur = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.util_1.0.0.201911220918.jar " />
+	< classpathentry  tur = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.httpcomponents.httpclient_4.5.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.httpcomponents.httpcore_4.4.4.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.httpcomponents.httpmime_4.5.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.commons.lang3_3.6.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.greenrobot.eventbus_3.1.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.assertj.core_3.10.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.junit_4.12.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.fasterxml.jackson.core.jackson-databind_2.9.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.fasterxml.jackson.core.jackson-core_2.9.6.jar " />
+	< classpathentry  kind = " lib "  yolu = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.fasterxml.jackson.core.jackson-annotations_2.9.1.jar " />
+	< classpathentry  kind = " lib "  yolu = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/ch.qos.logback.classic_1.2.3.jar " />
+	< classpathentry  kind = " lib "  yolu = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/ch.qos.logback.core_1.2.3.jar " />
+	< classpathentry  kind = " lib "  yolu = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/slf4j.api_1.7.25.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.fusesource.jansi_1.17.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.netlightbody_1.0.0.201911220918.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.poi_1.0.0.201911220918.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/xml-apis_1.4.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.commons.commons-text_1.6.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.mysql.cj_8.0.17.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.proxyvole_1.0.0.201911220918.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.commons.codec_1.7.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.commons.logging_1.2.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.hamcrest.core_1.3.0.v201303031735.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.beanshell.bsh_2.0.0.0b4.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.ant.launcher_1.9.6.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.core.appium_1.0.0.201911220918.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.eclipse.equinox.common_3.8.0.v20160509-1230.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.core.webui_1.0.0.201911220918.jar " >
+		<oznitelikler >
+			< attribute  name = " javadoc_location "  value = " file: / E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/apidocs/com.kms.katalon.core.webui/ " />
+		</ oznitelikler >
+	</ classpathentry >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.json_20140107.0.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.core.mobile_1.0.0.201911220918.jar " >
+		<oznitelikler >
+			< attribute  name = " javadoc_location "  value = " file: / E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/apidocs/com.kms.katalon.core.mobile/ " />
+		</oznitelikler >
+	</classpathentry >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/org.apache.commons.validator_1.5.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.core.cucumber_1.0.0.201911220918.jar " >
+		<oznitelikler >
+			< attribute  name = " javadoc_location "  value = " file: / E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/apidocs/com.kms.katalon.core.cucumber/ " />
+		</oznitelikler >
+	</classpathentry >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.core_3.0.2.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.datatable_1.0.3.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.datatable-dependencies_1.0.3.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.expressions_5.0.19.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.gherkin_5.0.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.html_0.2.7.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.java_3.0.2.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.tag-expressions_1.1.1.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/io.cucumber.junit_3.0.2.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.core.webservice_1.0.0.201911220918.jar " >
+		< oznitelikler >
+			< attribute  name = " javadoc_location "  value = " file: / E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/apidocs/com.kms.katalon.core.webservice/ " />
+		</ oznitelikler >
+	</ classpathentry >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/wsdl4j_1.6.2.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.google.oauth-client.google-oauth-client_1.22.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.google.http-client.google-http-client_1.22.0.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/ca.juliusdavies.not-yet-commons-ssl_0.3.11.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.preferences_1.0.0.201911220918.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/plugins/com.kms.katalon.core.windows_1.0.0.201911220918.jar " >
+		< oznitelikler >
+			< attribute  name = " javadoc_location "  value = " file: / E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/resources/apidocs/com.kms.katalon.core.windows/ " />
+		</oznitelikler >
+	</classpathentry >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8873/1.0.3/AuthenticationTokenFromLogin.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8872/1.0.1/DropdownAngularJS.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8871/1.0.3/calendar-plugin.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8870/1.0.1/katalon-plugin-assert-custom-keyword.jar " / >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8876/1.0.0/katalon-studio-select2-keywords-plugin.jar " / >
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8866/1.0.2/ExcelKeywords.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8877/1.0.0/KeywordStore.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8867/1.0.7/katalon-studio-report-plugin.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8864/1.0.0/katalon-studio-datetime-plugin.jar " />
+	< classpathentry  kind = " lib "  path = " E: /Katalon_Studio_Windows_64-7.1.0/Katalon_Studio_Windows_64-7.1.0/configuration/plugin/install/8875/1.0.0/katalon-studio-DragAndDrop-plugin.jar " />
+	< classpathentry  exported = " true "  kind = " con "  path = " GROOVY_SUPPORT " />
+	< classpathentry  kind = " output "  yol = " bin " />
+</ s?n?f yolu >
+
+<! DOCTYPE html >
+<! - [IE ise]> <! [endif] ->
+< html >
+  
+  < kafa >
+    < meta  charset = " utf-8 " >
+    < meta  http-equiv = " X-UA-Uyumlu " content = " IE = edge, chrome = 1 " >
+    < title > WindowsMessages'? s?rala
+   | Dapplo.Windows </ title >
+    < meta  name = " viewport " content = " width = device-width " >
+    < meta  name = " title " content = " Windows Mesajlar?n? S?rala
+   | Dapplo.Windows " >
+    < meta  name = " generator " content = " docfx 2.18.1.0 " >
+    
+    < link  rel = " k?sayol simgesi " href = " ../images/favicon.ico " >
+    < link  rel = " stylesheet " href = " ../styles/docfx.vendor.css " >
+    < link  rel = " stylesheet " href = " ../styles/docfx.css " >
+    < link  rel = " stylesheet " href = " ../styles/main.css " >
+    < meta  property = " docfx: navrel " content = " ../toc " >
+    < meta  property = " docfx: tocrel " content = " toc " >
+    
+    
+  </ head >
+  < body  data-spy = " scroll " data-target = " #affix " >
+    < div  id = " sarmalay?c? " >
+      < basl?k >
+        
+        < nav  id = " autocollapse " class = " navbar navbar ng-kapsam " role = " gezinme " >
+          < div  class = " container " >
+            < div  class = " navbar-header " >
+              < button  type = " button " class = " navbar-toggle " data-toggle = " collapse " data-target = " #navbar " >
+                < span  class = " sr-only " > Gezinmeyi degistir </ span >
+                < span  class = " icon-bar " > </ span >
+                < span  class = " icon-bar " > </ span >
+                < span  class = " icon-bar " > </ span >
+              </ button >
+              
+              < Bir  s?n?f = " navbar marka " href =" ../index.html " >
+                < img  id = " logo " class = " svg " src = " ../images/d.svg " alt = "" >
+              </ a >
+            </ div >
+            < div  class = " collapse navbar-collapse " id = " navbar " >
+              < form  class = " navbar-form navbar-right " role = " search " id = " search " >
+                < div  class = " form-group " >
+                  < input  type = " text " class = " form-control " id = " search-query " placeholder = " Ara " autocomplete = " off " >
+                </ div >
+              </ form >
+                < ul  class = " nav level1 navbar-nav " >
+                  < li  class = "" >
+                    < Bir  href = " ../articles/intro.html " title =" Makaleler " class ="" > Makaleler </ a >
+                  </ li >
+                  < li  class = " active " >
+                    < Bir  href = " ../api/index.html " basl?g? =" Api Belgeleri " s?n?f? =" aktif " > Api Belgeleri </ a >
+                  </ li >
+                </ ul >
+            </ div >
+          </ div >
+        </ nav >        
+        < div  class = " subnav navbar navbar-default " >
+          < div  class = " container hide-when-search " id = " icerik haritas? " >
+            < ul  class = " icerik haritas? " >
+              < li > </ li >
+            </ ul >
+          </ div >
+        </ div >
+      </ basl?k >
+      < div  role = " main " class = " kapsay?c? govde icerigi arama s?ras?nda-gizle " >
+        < div  class = " sidenav hide-when-search " >
+          < Bir  s?n?f "= toc-gecis cokusu btn " veri toggle =" cokus " href =" #sidetoggle " aria-genisletilmis =" false " aria-kontroller =" sidetoggle " > Goster / Icindekiler'i Gizle Tablo </ a >
+          < div  class = " sidetoggle collapse " id = " sidetoggle " >
+            < div >
+              < div  class = " sidefilter " >
+                < form  class = " toc-filter " >
+                  < span  class = " glyphicon glyphicon-filter filtre-icon " > </ span >
+                  < input  type = " text " id = " toc_filter_input " placeholder = " Filtrelemek icin buraya girin ... " onkeypress = " if (event.keyCode == 13) {return false;} " >
+                </ form >
+              </ div >
+              < div  class = " sidetoc " >
+                < div  class = " toc " id = " toc " >
+                  
+                  < ul  class = " nav level1 " >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.App.html " basl?g? =" Dapplo.Windows.App " s?n?f? ="" > Dapplo.Windows.App </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.App.AppQuery.html " basl?g? =" AppQuery " s?n?f? ="" > AppQuery </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Citrix.html " basl?g? =" Dapplo.Windows.Citrix " s?n?f? ="" > Dapplo.Windows.Citrix </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Citrix.WinFrame.html " basl?g? =" WinFrame " s?n?f? ="" > WinFrame </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Citrix.Enums.html " basl?g? =" Dapplo.Windows.Citrix.Enums " s?n?f? ="" > Dapplo.Windows.Citrix.Enums </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Citrix.Enums.ConnectStates.html " basl?g? =" ConnectStates " s?n?f? ="" > ConnectStates </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Citrix.Enums.EventMask.html " basl?g? =" EventMask " s?n?f? ="" > EventMask </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Citrix.Enums.InfoClasses.html " basl?g? =" InfoClasses " s?n?f? ="" > InfoClasses </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Citrix.Structs.html " basl?g? =" Dapplo.Windows.Citrix.Structs " s?n?f? ="" > Dapplo.Windows.Citrix.Structs </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Citrix.Structs.ClientAddress.html " basl?g? =" ClientAddress " s?n?f? ="" > ClientAddress </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Citrix.Structs.ClientDisplay.html " basl?g? =" ClientDisplay " s?n?f? ="" > ClientDisplay </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Clipboard.html " basl?g? =" Dapplo.Windows.Clipboard " s?n?f? ="" > Dapplo.Windows.Clipboard </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Clipboard.ClipboardMonitor.html " basl?g? =" ClipboardMonitor " s?n?f? ="" > ClipboardMonitor </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Clipboard.ClipboardNative.html " basl?g? =" ClipboardNative " s?n?f? ="" > ClipboardNative </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Clipboard.ClipboardUpdateInformation.html " basl?g? =" ClipboardUpdateInformation " s?n?f? ="" > ClipboardUpdateInformation </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Clipboard.StandardClipboardFormats.html " basl?g? =" StandardClipboardFormats " s?n?f? ="" > StandardClipboardFormats </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Com.html " basl?g? =" Dapplo.Windows.Com " s?n?f? ="" > Dapplo.Windows.Com </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Com.ComProgIdAttribute.html " basl?g? =" ComProgIdAttribute " s?n?f? ="" > ComProgIdAttribute </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Com.ComWrapper.html " basl?g? =" ComWrapper " s?n?f? ="" > ComWrapper </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Com.DisposableCom.html " basl?g? =" DisposableCom " s?n?f? ="" > DisposableCom </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Com.IDispatch.html " basl?g? =" Idispatch " s?n?f? ="" > Idispatch </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Com.IDisposableCom-1.html " basl?g? =" IDisposableCom ve LT T gt; " S?n?f ="" > IDisposableCom ve LT T gt; </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Com.IOleCommandTarget.html " basl?g? =" IOleCommandTarget " s?n?f? ="" > IOleCommandTarget </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Com.IOleWindow.html " basl?g? =" IOleWindow " s?n?f? ="" > IOleWindow </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Com.IUnknown.html " basl?g? =" Iunknown " s?n?f? ="" > Iunknown </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Common.html " basl?g? =" Dapplo.Windows.Common " s?n?f? ="" > Dapplo.Windows.Common </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Win32.html " basl?g? =" Win32 " s?n?f? ="" > Win32 </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.WindowsVersion.html " basl?g? =" WindowsVersion " s?n?f? ="" > WindowsVersion </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Common.Enums.html " basl?g? =" Dapplo.Windows.Common.Enums " s?n?f? ="" > Dapplo.Windows.Common.Enums </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Enums.AdjacentTo.html " basl?g? =" AdjacentTo " s?n?f? ="" > AdjacentTo </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Enums.HResult.html " basl?g? =" HResult " s?n?f? ="" > HResult </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Enums.Win32Error.html " basl?g? =" Win32Error " s?n?f? ="" > Win32Error </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Common.Extensions.html " basl?g? =" Dapplo.Windows.Common.Extensions " s?n?f? ="" > Dapplo.Windows.Common.Extensions </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Extensions.HResultExtensions.html " basl?g? =" HResultExtensions " s?n?f? ="" > HResultExtensions </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Extensions.RectExensions.html " basl?g? =" RectExensions " s?n?f? ="" > RectExensions </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Common.Structs.html " basl?g? =" Dapplo.Windows.Common.Structs " s?n?f? ="" > Dapplo.Windows.Common.Structs </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Structs.POINT.html " basl?g? =" NOKTA " s?n?f? ="" > NOKTA </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Structs.RECT.html " basl?g? =" RECT " s?n?f? ="" > RECT </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Structs.RECTF.html " basl?g? =" RECTF " s?n?f? ="" > RECTF </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Common.Structs.SIZE.html " basl?g? =" ALAN " s?n?f? ="" > BOYUT </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Desktop.html " basl?g? =" Dapplo.Windows.Desktop " s?n?f? ="" > Dapplo.Windows.Desktop </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.EnvironmentChangedEventArgs.html " basl?g? =" EnvironmentChangedEventArgs " s?n?f? ="" > EnvironmentChangedEventArgs </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.EnvironmentMonitor.html " basl?g? =" EnvironmentMonitor " s?n?f? ="" > EnvironmentMonitor </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.IInteropWindow.html " basl?g? =" IInteropWindow " s?n?f? ="" > IInteropWindow </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.InteropWindow.html " basl?g? =" InteropWindow " s?n?f? ="" > InteropWindow </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.InteropWindowExtensions.html " basl?g? =" InteropWindowExtensions " s?n?f? ="" > InteropWindowExtensions </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.InteropWindowFactory.html " basl?g? =" InteropWindowFactory " s?n?f? ="" > InteropWindowFactory </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.InteropWindowQuery.html " basl?g? =" InteropWindowQuery " s?n?f? ="" > InteropWindowQuery </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.WindowScroller.html " basl?g? =" WindowScroller " s?n?f? ="" > WindowScroller </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.WindowsEnumerator.html " basl?g? =" WindowsEnumerator " s?n?f? ="" > WindowsEnumerator </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Desktop.WinEventHook.html " basl?g? =" WinEventHook " s?n?f? ="" > WinEventHook </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.DesktopWindowsManager.html " basl?g? =" Dapplo.Windows.DesktopWindowsManager " s?n?f? ="" > Dapplo.Windows.DesktopWindowsManager </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.DesktopWindowsManager.Dwm.html " basl?g? =" DWM " s?n?f? ="" > dwm </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.DesktopWindowsManager.DwmBlurBehind.html " basl?g? =" DwmBlurBehind " s?n?f? "" = > DwmBlurBehind </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.DesktopWindowsManager.DwmBlurBehindFlags.html " basl?g? =" DwmBlurBehindFlags " s?n?f? ="" > DwmBlurBehindFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.DesktopWindowsManager.DwmSetIconicLivePreviewFlags.html " basl?g? =" DwmSetIconicLivePreviewFlags " s?n?f? ="" > DwmSetIconicLivePreviewFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.DesktopWindowsManager.DwmThumbnailProperties.html " basl?g? =" DwmThumbnailProperties " s?n?f? ="" > DwmThumbnailProperties </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.DesktopWindowsManager.DwmThumbnailPropertyFlags.html " basl?g? =" DwmThumbnailPropertyFlags " s?n?f? ="" > DwmThumbnailPropertyFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.DesktopWindowsManager.DwmWindowAttributes.html " basl?g? =" DwmWindowAttributes " s?n?f? ="" > DwmWindowAttributes </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Dpi.html " basl?g? =" Dapplo.Windows.Dpi " s?n?f? ="" > Dapplo.Windows.Dpi </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.BitmapScaleHandler.html " basl?g? =" BitmapScaleHandler " s?n?f? ="" > BitmapScaleHandler </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.BitmapScaleHandler-1.html " basl?g? =" BitmapScaleHandler & lt; TKey & gt; " S?n?f ="" > BitmapScaleHandler & lt; TKey & gt; </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.DpiAwareness.html " basl?g? =" DpiAwareness " s?n?f? ="" > DpiAwareness </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.DpiAwarenessContext.html " basl?g? =" DpiAwarenessContext " s?n?f? ="" > DpiAwarenessContext </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.DpiHandler.html " basl?g? =" DpiHandler " s?n?f? ="" > DpiHandler </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.WinProcListener.html " basl?g? =" WinProcListener " s?n?f? ="" > WinProcListener </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Dpi.Enums.html " basl?g? =" Dapplo.Windows.Dpi.Enums " s?n?f? ="" > Dapplo.Windows.Dpi.Enums </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.Enums.MonitorDpiType.html " basl?g? =" MonitorDpiType " s?n?f? ="" > MonitorDpiType </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Dpi.Forms.html " basl?g? =" Dapplo.Windows.Dpi.Forms " s?n?f? ="" > Dapplo.Windows.Dpi.Forms </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.Forms.DpiAwareForm.html " basl?g? =" DpiAwareForm " s?n?f? ="" > DpiAwareForm </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.Forms.FormsExtensions.html " basl?g? =" FormsExtensions " s?n?f? ="" > FormsExtensions </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Dpi.Wpf.html " basl?g? =" Dapplo.Windows.Dpi.Wpf " s?n?f? ="" > Dapplo.Windows.Dpi.Wpf </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Dpi.Wpf.WindowExtensions.html " basl?g? =" WindowExtensions " s?n?f? ="" > WindowExtensions </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Enums.html " basl?g? =" Dapplo.Windows.Enums " s?n?f? ="" > Dapplo.Windows.Enums </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Enums.InteropWindowCacheFlags.html " basl?g? =" InteropWindowCacheFlags " s?n?f? ="" > InteropWindowCacheFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Enums.WinEventHookFlags.html " basl?g? =" WinEventHookFlags " s?n?f? ="" > WinEventHookFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Enums.WinEvents.html " basl?g? =" WinEvents " s?n?f? ="" > WinEvents </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Gdi32.html " basl?g? =" Dapplo.Windows.Gdi32 " s?n?f? ="" > Dapplo.Windows.Gdi32 </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Gdi32Api.html " basl?g? =" Gdi32Api " s?n?f? ="" > Gdi32Api </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.GdiExtensions.html " basl?g? =" GdiExtensions " s?n?f? ="" > GdiExtensions </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.GdiPlusApi.html " basl?g? =" GdiPlusApi " s?n?f? ="" > GdiPlusApi </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Gdi32.Enums.html " basl?g? =" Dapplo.Windows.Gdi32.Enums " s?n?f? ="" > Dapplo.Windows.Gdi32.Enums </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Enums.BitmapCompressionMethods.html " basl?g? =" BitmapCompressionMethods " s?n?f? ="" > BitmapCompressionMethods </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Enums.ColorSpaceEnum.html " basl?g? =" ColorSpaceEnum " s?n?f? ="" > ColorSpaceEnum </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Enums.DeviceCaps.html " basl?g? =" DeviceCaps " s?n?f? ="" > DeviceCaps </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Enums.GdiPlusStatus.html " basl?g? =" GdiPlusStatus " s?n?f? ="" > GdiPlusStatus </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Enums.GpUnit.html " basl?g? =" GpUnit " s?n?f? ="" > GpUnit </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Enums.RasterOperations.html " basl?g? =" RasterOperations " s?n?f? ="" > RasterOperations </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.html " basl?g? =" Dapplo.Windows.Gdi32.SafeHandles " s?n?f? ="" > Dapplo.Windows.Gdi32.SafeHandles </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeCompatibleDcHandle.html " basl?g? =" SafeCompatibleDcHandle " s?n?f? ="" > SafeCompatibleDcHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeDcHandle.html " basl?g? =" SafeDcHandle " s?n?f? ="" > SafeDcHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeDeviceContextHandle.html " basl?g? =" SafeDeviceContextHandle " s?n?f? ="" > SafeDeviceContextHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeDibSectionHandle.html " basl?g? =" SafeDibSectionHandle " s?n?f? ="" > SafeDibSectionHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeHBitmapHandle.html " basl?g? =" SafeHBitmapHandle " s?n?f? ="" > SafeHBitmapHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeObjectHandle.html " basl?g? =" SafeObjectHandle " s?n?f? ="" > SafeObjectHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeRegionHandle.html " basl?g? =" SafeRegionHandle " s?n?f? ="" > SafeRegionHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeSelectObjectHandle.html " basl?g? =" SafeSelectObjectHandle " s?n?f? ="" > SafeSelectObjectHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.SafeHandles.SafeWindowDcHandle.html " basl?g? =" SafeWindowDcHandle " s?n?f? ="" > SafeWindowDcHandle </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Gdi32.Structs.html " basl?g? =" Dapplo.Windows.Gdi32.Structs " s?n?f? ="" > Dapplo.Windows.Gdi32.Structs </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Structs.BitfieldColorMask.html " basl?g? =" BitfieldColorMask " s?n?f? ="" > BitfieldColorMask </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Structs.BitmapFileHeader.html " basl?g? =" BitmapFileHeader " s?n?f? ="" > BitmapFileHeader </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Structs.BitmapInfoHeader.html " basl?g? =" BITMAPINFOHEADER " s?n?f? ="" > BITMAPINFOHEADER </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Structs.BlurParams.html " basl?g? =" BlurParams " s?n?f? ="" > BlurParams </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Structs.CieXyz.html " basl?g? =" CieXyz " s?n?f? ="" > CieXyz </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Gdi32.Structs.CieXyzTripple.html " basl?g? =" CieXyzTripple " s?n?f? ="" > CieXyzTripple </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Input.html " basl?g? =" Dapplo.Windows.Input " s?n?f? ="" > Dapplo.Windows.Input </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Hotkey.html " basl?g? =" K?sayol " s?n?f? ="" > K?sayol </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.InputGenerator.html " basl?g? =" InputGenerator " s?n?f? ="" > InputGenerator </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.KeyboardHook.html " basl?g? =" keyboardhook " s?n?f? ="" > keyboardhook </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.KeyboardHookEventArgs.html " basl?g? =" KeyboardHookEventArgs " s?n?f? ="" > KeyboardHookEventArgs </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.MouseHook.html " basl?g? =" MouseHook " s?n?f? ="" > MouseHook </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.MouseHookEventArgs.html " basl?g? =" MouseHookEventArgs " s?n?f? ="" > MouseHookEventArgs </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Input.Enums.html " basl?g? =" Dapplo.Windows.Input.Enums " s?n?f? ="" > Dapplo.Windows.Input.Enums </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Enums.ExtendedKeyFlags.html " basl?g? =" ExtendedKeyFlags " s?n?f? ="" > ExtendedKeyFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Enums.ExtendedMouseFlags.html " basl?g? =" ExtendedMouseFlags " s?n?f? ="" > ExtendedMouseFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Enums.HookTypes.html " basl?g? =" HookTypes " s?n?f? ="" > HookTypes </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Enums.InputTypes.html " basl?g? =" InputTypes " s?n?f? ="" > InputTypes </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Enums.KeyEventFlags.html " basl?g? =" KeyEventFlags " s?n?f? ="" > KeyEventFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Enums.MouseEventFlags.html " basl?g? =" MouseEventFlags " s?n?f? ="" > MouseEventFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Enums.ScanCodes.html " basl?g? =" ScanCodes " s?n?f? ="" > ScanCodes </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Enums.VirtualKeyCodes.html " basl?g? =" VirtualKeyCodes " s?n?f? ="" > VirtualKeyCodes </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Input.Structs.html " basl?g? =" Dapplo.Windows.Input.Structs " s?n?f? ="" > Dapplo.Windows.Input.Structs </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Structs.HardwareInput.html " basl?g? =" HardwareInput " s?n?f? ="" > HardwareInput </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Structs.Input.html " basl?g? =" giris " s?n?f? ="" > giris </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Structs.InputUnion.html " basl?g? =" InputUnion " s?n?f? ="" > InputUnion </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Structs.KeyboardInput.html " basl?g? =" KeyboardInput " s?n?f? ="" > KeyboardInput </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Structs.KeyboardLowLevelHookStruct.html " basl?g? =" KeyboardLowLevelHookStruct " s?n?f? ="" > KeyboardLowLevelHookStruct </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Structs.MouseInput.html " basl?g? =" MouseInput " s?n?f? ="" > MouseInput </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Input.Structs.MouseLowLevelHookStruct.html " basl?g? =" MouseLowLevelHookStruct " s?n?f? ="" > MouseLowLevelHookStruct </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Interop.html " basl?g? =" Dapplo.Windows.Interop " s?n?f? ="" > Dapplo.Windows.Interop </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Interop.DisposableCom.html " basl?g? =" DisposableCom " s?n?f? ="" > DisposableCom </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Interop.IDisposableCom-1.html " basl?g? =" IDisposableCom ve LT T gt; " S?n?f ="" > IDisposableCom ve LT T gt; </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Kernel32.html " basl?g? =" Dapplo.Windows.Kernel32 " s?n?f? ="" > Dapplo.Windows.Kernel32 </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.Kernel32Api.html " basl?g? =" Kernel32Api " s?n?f? ="" > Kernel32Api </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.PsApi.html " basl?g? =" PSAPI " s?n?f? ="" > PSAPI </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Kernel32.Enums.html " basl?g? =" Dapplo.Windows.Kernel32.Enums " s?n?f? ="" > Dapplo.Windows.Kernel32.Enums </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.Enums.GlobalMemorySettings.html " basl?g? =" GlobalMemorySettings " s?n?f? ="" > GlobalMemorySettings </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.Enums.ProcessAccessRights.html " basl?g? =" ProcessAccessRights " s?n?f? ="" > ProcessAccessRights </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.Enums.ThreadAccess.html " basl?g? =" ThreadAccess " s?n?f? ="" > ThreadAccess </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.Enums.WindowsProducts.html " basl?g? =" WindowsProducts " s?n?f? ="" > WindowsProducts </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.Enums.WindowsProductTypes.html " basl?g? =" WindowsProductTypes " s?n?f? ="" > WindowsProductTypes </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.Enums.WindowsSuites.html " basl?g? =" WindowsSuites " s?n?f? ="" > WindowsSuites </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Kernel32.Structs.html " basl?g? =" Dapplo.Windows.Kernel32.Structs " s?n?f? ="" > Dapplo.Windows.Kernel32.Structs </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Kernel32.Structs.OsVersionInfoEx.html " basl?g? =" OsVersionInfoEx " s?n?f? ="" > OsVersionInfoEx </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Messages.html " basl?g? =" Dapplo.Windows.Messages " s?n?f? ="" > Dapplo.Windows.Messages </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Messages.WindowsMessage.html " basl?g? =" WindowsMessage " s?n?f? ="" > WindowsMessage </ a >
+                          </ li >
+                          < li  class = " active " >
+                            < Bir  href = " Dapplo.Windows.Messages.WindowsMessages.html " basl?g? =" WindowsMessages " s?n?f? =" aktif " > WindowsMessages </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Messages.WinProcHandler.html " basl?g? =" WinProcHandler " s?n?f? ="" > WinProcHandler </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Multimedia.html " basl?g? =" Dapplo.Windows.Multimedia " s?n?f? ="" > Dapplo.Windows.Multimedia </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Multimedia.SoundSettings.html " basl?g? =" SoundSettings " s?n?f? ="" > SoundSettings </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Multimedia.SystemSounds.html " basl?g? =" SystemSounds " s?n?f? ="" > SystemSounds </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Multimedia.WinMm.html " basl?g? =" WINMM " s?n?f? ="" > WINMM </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Native.html " basl?g? =" Dapplo.Windows.Native " s?n?f? ="" > Dapplo.Windows.Native </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Native.Shell32.html " basl?g? =" Shell32 " s?n?f? ="" > Shell32 </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Native.Shell32.FolderType.html " basl?g? =" Shell32.FolderType " s?n?f? ="" > Shell32.FolderType </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Native.Shell32.IconSize.html " basl?g? =" Shell32.IconSize " s?n?f? ="" > Shell32.IconSize </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Shell32.html " basl?g? =" Dapplo.Windows.Shell32 " s?n?f? ="" > Dapplo.Windows.Shell32 </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Shell32.Shell32Api.html " basl?g? =" Shell32Api " s?n?f? ="" > Shell32Api </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Shell32.Enums.html " basl?g? =" Dapplo.Windows.Shell32.Enums " s?n?f? ="" > Dapplo.Windows.Shell32.Enums </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Shell32.Enums.AppBarEdges.html " basl?g? =" AppBarEdges " s?n?f? ="" > AppBarEdges </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Shell32.Enums.AppBarMessages.html " basl?g? =" AppBarMessages " s?n?f? ="" > AppBarMessages </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Shell32.Enums.AppBarStates.html " basl?g? =" AppBarStates " s?n?f? ="" > AppBarStates </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Shell32.Structs.html " basl?g? =" Dapplo.Windows.Shell32.Structs " s?n?f? ="" > Dapplo.Windows.Shell32.Structs </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Shell32.Structs.AppBarData.html " basl?g? =" AppBarData " s?n?f? ="" > AppBarData </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.Structs.html " basl?g? =" Dapplo.Windows.Structs " s?n?f? ="" > Dapplo.Windows.Structs </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.Structs.WinEventInfo.html " basl?g? =" WinEventInfo " s?n?f? ="" > WinEventInfo </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.User32.html " basl?g? =" Dapplo.Windows.User32 " s?n?f? ="" > Dapplo.Windows.User32 </ a >
+                        
+                        < ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.User32Api.html " basl?g? =" User32Api " s?n?f? ="" > User32Api </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.User32Api.EnumWindowsProc.html " basl?g? =" User32Api.EnumWindowsProc " s?n?f? ="" > User32Api.EnumWindowsProc </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  class = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.User32.Enums.html " basl?g? =" Dapplo.Windows.User32.Enums " s?n?f? ="" > Dapplo.Windows.User32.Enums </ a >
+                        
+                        < ul  s?n?f? = " nav level2 " >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ClassLongIndex.html " title =" ClassLongIndex " class ="" > ClassLongIndex </ a >
+                          </li >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.CursorInfoFlags.html " basl?g? =" CursorInfoFlags " s?n?f? ="" > CursorInfoFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.DesktopAccessRight.html " basl?g? =" DesktopAccessRight " s?n?f? ="" > DesktopAccessRight </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ExtendedWindowStyleFlags.html " basl?g? =" ExtendedWindowStyleFlags " s?n?f? ="" > ExtendedWindowStyleFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.GetWindowCommands.html " basl?g? =" GetWindowCommands " s?n?f? ="" > GetWindowCommands </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.MonitorFrom.html " basl?g? =" MonitorFrom " s?n?f? ="" > MonitorFrom </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.MonitorInfoFlags.html " basl?g? =" MonitorInfoFlags " s?n?f? ="" > MonitorInfoFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ObjectIdentifiers.html " basl?g? =" ObjectIdentifiers " s?n?f? ="" > ObjectIdentifiers </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ObjectStates.html " basl?g? =" ObjectStates " s?n?f? ="" > ObjectStates </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.PrintWindowFlags.html " title =" PrintWindowFlags " class ="" > PrintWindowFlags </ a >
+                          </li >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.RegionResults.html " title =" RegionResults " class ="" > RegionResults </ a >
+                          </li >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ScrollBarCommands.html " basl?g? =" ScrollBarCommands " s?n?f? ="" > ScrollBarCommands </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ScrollBarStateIndexes.html " basl?g? =" ScrollBarStateIndexes " s?n?f? ="" > ScrollBarStateIndexes </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ScrollBarTypes.html " basl?g? =" ScrollBarTypes " s?n?f? ="" > ScrollBarTypes </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ScrollInfoMask.html " basl?g? =" ScrollInfoMask " s?n?f? ="" > ScrollInfoMask </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ScrollModes.html " basl?g? =" ScrollModes " s?n?f? ="" > ScrollModes </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.SendMessageTimeoutFlags.html " basl?g? =" SendMessageTimeoutFlags " s?n?f? ="" > SendMessageTimeoutFlags </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.ShowWindowCommands.html " basl?g? =" ShowWindowCommands " s?n?f? ="" > ShowWindowCommands </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.SysCommands.html " basl?g? =" SysCommands " s?n?f? ="" > SysCommands </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.SystemMetric.html " basl?g? =" SystemMetric " s?n?f? ="" > SystemMetric </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.SystemParametersInfoActions.html " basl?g? =" SystemParametersInfoActions " s?n?f? ="" > SystemParametersInfoActions </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.SystemParametersInfoBehaviors.html " title =" SystemParametersInfoBehaviors " class ="" > SystemParametersInfoBehaviors </ a >
+                          </li >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.TitleBarInfoIndexes.html " title =" TitleBarInfoIndexes " class ="" > TitleBarInfoIndexes </ a >
+                          </li >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Enums.WindowLongIndex.html " title =" WindowLongIndex " class ="" > WindowLongIndex </ a >
+                          </li >
+                          < li class = "" >
+                            < a  href = " Dapplo.Windows.User32.Enums.WindowPlacementFlags.html " title =" WindowPlacementFlags " class ="" > WindowPlacementFlags </ a >
+                          </li >
+                          < li class = "" >
+                            < a  href = " Dapplo.Windows.User32.Enums.WindowPos.html " basl?g? =" WINDOWPOS " s?n?f? ="" > WINDOWPOS </ a >
+                          </ li >
+                          < li  class = "" >
+                            < a  href = " Dapplo.Windows.User32.Enums.WindowStyleFlags.html " basl?g? =" WindowStyleFlags " s?n?f? ="" > WindowStyleFlags </ a >
+                          </ li >
+                        </ ul >   </ li >
+                    < li  class = "" >
+                      < span  s?n?f? = " expand-stub " > </ span >
+                      < Bir  href = " Dapplo.Windows.User32.SafeHandles.html " basl?g? =" Dapplo.Windows.User32.SafeHandles " s?n?f? ="" > Dapplo.Windows.User32.SafeHandles </ a >
+                        
+                        <ul  class = " nav level2 " >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.SafeHandles.SafeCurrentInputDesktopHandle.html " basl?g? =" SafeCurrentInputDesktopHandle " s?n?f? ="" > SafeCurrentInputDesktopHandle </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.SafeHandles.SafeIconHandle.html " title =" SafeIconHandle " class ="" > SafeIconHandle </ a >
+                          </li >
+                        </ ul >  </ li >
+                    < li class = "" >
+                      < span  class = " expand-stub " ></ span >
+                      < Bir  href = " Dapplo.Windows.User32.Structs.html " basl?g? =" Dapplo.Windows.User32.Structs " s?n?f? ="" > Dapplo.Windows.User32.Structs </ a >
+                        
+                        < ul  s?n?f? = " nav level2 " >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.AnimationInfo.html " basl?g? =" AnimationInfo " s?n?f? ="" > AnimationInfo </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.CursorInfo.html " title =" CursorInfo " class ="" > CursorInfo </ a >
+                          </li >
+                          <li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.DisplayInfo.html " basl?g? =" DisplayInfo " s?n?f? ="" > DisplayInfo </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.IconInfo.html " title =" ICONINFO " class ="" > ICONINFO </ a >
+                          </li >
+                          <li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.MonitorInfoEx.html " title =" MonitorInfoEx " class ="" > MonitorInfoEx </ a >
+                          </li >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.ScrollBarInfo.html " title =" ScrollBarInfo " class ="" > ScrollBarInfo </ a >
+                          </li >
+                          <li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.ScrollInfo.html " basl?g? =" SCROLLINFO " s?n?f? ="" > SCROLLINFO </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.TitleBarInfoEx.html " basl?g? =" TitleBarInfoEx " s?n?f? ="" > TitleBarInfoEx </ a >
+                          </ li >
+                          < li  class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.WindowInfo.html " title =" WindowInfo " class ="" > WindowInfo </ a >
+                          </li >
+                          < li class = "" >
+                            < Bir  href = " Dapplo.Windows.User32.Structs.WindowPlacement.html " title =" WindowPlacement " class ="" > WindowPlacement </ a >
+                          </li >
+                        </ ul >  </ li >
+                  </ ul >         </ div >
+              </div >
+            </div >
+          </div >
+        </div >
+        < div  s?n?f? = " makale sat?r? ?zgaras?-sag " >
+          < div  class = " col-md-10 " >
+            < makale  class = " content wrap " id = " _content " data-uid = " Dapplo.Windows.Messages.WindowsMessages " >
+  
+  
+  < h1  id = " Dapplo_Windows_Messages_WindowsMessages " data-uid = " Dapplo.Windows.Messages.WindowsMessages " > Windows Mesajlar?n? S?rala
+  </ h1 >
+  < div  class = " markdown level0 Summary " > < p > Olas? tum Windows iletileri </ p >
+</ div >
+  < div  class = " markdown level0 conceptual " > </ div >
+  < H6 > < strong > Ad alan? </ strong > : < a  class = " xref " href =" Dapplo.Windows.Messages.html " > Dapplo.Windows.Messages </ a > </ h6 >
+  < h6 > < strong > Montaj </ strong > : Dapplo.Windows.Messages.dll </ h6 >
+  < h5  id = " Dapplo_Windows_Messages_WindowsMessages_syntax " > Sozdizimi </ h5 >
+  < div  class = " codewrapper " >
+    < pre > < code  class = " lang-csharp hljs " > genel enum WindowsMessages: uint </ code > </ pre >
+  </ div >
+  < h3  id = " fields " > Alanlar
+  </ h3 >
+  < table  class = " table-bordered table-strip-ozet tablo-yogunlast?r?lm?s " >
+    < thead >
+      < tr >
+        < th > Ad </ th >
+        < th > Ac?klama </ th >
+      </ tr >
+    < thead >
+    < tbody >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_ADDSTRING " > CB_ADDSTRING </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_DELETESTRING " > CB_DELETESTRING </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_DIR " > CB_DIR </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_FINDSTRING " > CB_FINDSTRING </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_FINDSTRINGEXACT " > CB_FINDSTRINGEXACT </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETCOMBOBOXINFO " > CB_GETCOMBOBOXINFO </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETCOUNT " > CB_GETCOUNT </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETCURSEL " > CB_GETCURSEL </ td >
+        < td > </td>
+      </tr>
+      <tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETDROPPEDCONTROLRECT " > CB_GETDROPPEDCONTROLRECT </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETDROPPEDSTATE " > CB_GETDROPPEDSTATE </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETDROPPEDWIDTH " > CB_GETDROPPEDWIDTH </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETEDITSEL " > CB_GETEDITSEL </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETEXTENDEDUI " > CB_GETEXTENDEDUI </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETHORIZONTALEXTENT " > CB_GETHORIZONTALEXTENT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETITEMDATA " > CB_GETITEMDATA </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETITEMHEIGHT " > CB_GETITEMHEIGHT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETLBTEXT " > CB_GETLBTEXT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETLBTEXTLEN " > CB_GETLBTEXTLEN </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETLOCALE " > CB_GETLOCALE </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_GETTOPINDEX " > CB_GETTOPINDEX </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_INITSTORAGE " > CB_INITSTORAGE </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_INSERTSTRING " > CB_INSERTSTRING </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_LIMITTEXT " > CB_LIMITTEXT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_MSGMAX " > CB_MSGMAX </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_MSGMAX_OLD " > CB_MSGMAX_OLD </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_MULTIPLEADDSTRING " > CB_MULTIPLEADDSTRING </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_RESETCONTENT " > CB_RESETCONTENT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SELECTSTRING " > CB_SELECTSTRING </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETCURSEL " > CB_SETCURSEL </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETDROPPEDWIDTH " > CB_SETDROPPEDWIDTH </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETEDITSEL " > CB_SETEDITSEL </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETEXTENDEDUI " > CB_SETEXTENDEDUI </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETHORIZONTALEXTENT " > CB_SETHORIZONTALEXTENT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETITEMDATA " > CB_SETITEMDATA </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETITEMHEIGHT " > CB_SETITEMHEIGHT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETLOCALE " > CB_SETLOCALE </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SETTOPINDEX " > CB_SETTOPINDEX </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_CB_SHOWDROPDOWN " > CB_SHOWDROPDOWN </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_CANUNDO " > EM_CANUNDO </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_CHARFROMPOS " > EM_CHARFROMPOS </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_EMPTYUNDOBUFFER " > EM_EMPTYUNDOBUFFER </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_FMTLINES " > EM_FMTLINES </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETFIRSTVISIBLELINE " > EM_GETFIRSTVISIBLELINE </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETHANDLE " > EM_GETHANDLE </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETIMESTATUS " > EM_GETIMESTATUS </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETLIMITTEXT " > EM_GETLIMITTEXT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETLINE " > EM_GETLINE </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETLINECOUNT " > EM_GETLINECOUNT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETMARGINS " > EM_GETMARGINS </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETMODIFY " > EM_GETMODIFY </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETPASSWORDCHAR " > EM_GETPASSWORDCHAR </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETRECT " > EM_GETRECT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETSEL " > EM_GETSEL </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETTHUMB " > EM_GETTHUMB </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_GETWORDBREAKPROC " > EM_GETWORDBREAKPROC </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_LIMITTEXT " > EM_LIMITTEXT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_LINEFROMCHAR " > EM_LINEFROMCHAR </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_LINEINDEX " > EM_LINEINDEX </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_LINELENGTH " > EM_LINELENGTH </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_LINESCROLL " > EM_LINESCROLL </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_MSGMAX " > EM_MSGMAX </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_POSFROMCHAR " > EM_POSFROMCHAR </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_REPLACESEL " > EM_REPLACESEL </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SCROLL " > EM_SCROLL </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SCROLLCARET " > EM_SCROLLCARET </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETFONT " > EM_SETFONT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETHANDLE " > EM_SETHANDLE </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETIMESTATUS " > EM_SETIMESTATUS </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETMARGINS " > EM_SETMARGINS </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETMODIFY " > EM_SETMODIFY </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETPASSWORDCHAR " > EM_SETPASSWORDCHAR </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETREADONLY " > EM_SETREADONLY </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETRECT " > EM_SETRECT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETRECTNP " > EM_SETRECTNP </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < Td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETSEL " > EM_SETSEL </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETTABSTOPS " > EM_SETTABSTOPS </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETWORDBREAK " > EM_SETWORDBREAK </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_SETWORDBREAKPROC " > EM_SETWORDBREAKPROC </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_EM_UNDO " > EM_UNDO </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_ADDFILE " > LB_ADDFILE </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_ADDSTRING">LB_ADDSTRING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_ADDSTRINGLOWER">LB_ADDSTRINGLOWER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_ADDSTRINGUPPER">LB_ADDSTRINGUPPER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_DELETESTRING">LB_DELETESTRING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_DIR">LB_DIR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_FINDSTRING">LB_FINDSTRING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_FINDSTRINGEXACT">LB_FINDSTRINGEXACT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_GETANCHORINDEX">LB_GETANCHORINDEX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_GETCARETINDEX">LB_GETCARETINDEX</td>
+        <td></td>
+      </tr>
+      <tr>
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETCOUNT " > LB_GETCOUNT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETCURSEL " > LB_GETCURSEL </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETHORIZONTALEXTENT " > LB_GETHORIZONTALEXTENT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETITEMDATA " > LB_GETITEMDATA </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETITEMHEIGHT " > LB_GETITEMHEIGHT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETITEMRECT " > LB_GETITEMRECT </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETLISTBOXINFO " > LB_GETLISTBOXINFO </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETLOCALE " > LB_GETLOCALE </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETSEL " > LB_GETSEL </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETSELCOUNT " > LB_GETSELCOUNT </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETSELITEMS " > LB_GETSELITEMS </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETTEXT " > LB_GETTEXT </ td >
+        < td > </ td>
+      </ tr>
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETTEXTLEN " > LB_GETTEXTLEN </ td>
+        < td > </ td >
+      </ tr >
+      < tr >
+        < td  id = " Dapplo_Windows_Messages_WindowsMessages_LB_GETTOPINDEX " > LB_GETTOPINDEX </ td >
+        < td > </ td >
+      </ tr >
+      < tr >
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_INITSTORAGE">LB_INITSTORAGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_INSERTSTRING">LB_INSERTSTRING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_INSERTSTRINGLOWER">LB_INSERTSTRINGLOWER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_INSERTSTRINGUPPER">LB_INSERTSTRINGUPPER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_ITEMFROMPOINT">LB_ITEMFROMPOINT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_MSGMAX">LB_MSGMAX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_MSGMAX_OLD">LB_MSGMAX_OLD</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_MULTIPLEADDSTRING">LB_MULTIPLEADDSTRING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_RESETCONTENT">LB_RESETCONTENT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SELECTSTRING">LB_SELECTSTRING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SELITEMRANGE">LB_SELITEMRANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SELITEMRANGEEX">LB_SELITEMRANGEEX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETANCHORINDEX">LB_SETANCHORINDEX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETCARETINDEX">LB_SETCARETINDEX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETCOLUMNWIDTH">LB_SETCOLUMNWIDTH</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETCOUNT">LB_SETCOUNT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETCURSEL">LB_SETCURSEL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETHORIZONTALEXTENT">LB_SETHORIZONTALEXTENT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETITEMDATA">LB_SETITEMDATA</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETITEMHEIGHT">LB_SETITEMHEIGHT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETLOCALE">LB_SETLOCALE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETSEL">LB_SETSEL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETTABSTOPS">LB_SETTABSTOPS</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LB_SETTOPINDEX">LB_SETTOPINDEX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LBCB_CARETOFF">LBCB_CARETOFF</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LBCB_CARETON">LBCB_CARETON</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LBCB_ENDTRACK">LBCB_ENDTRACK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_LBCB_STARTTRACK">LBCB_STARTTRACK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_DRVM_CLOSE">MM_DRVM_CLOSE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_DRVM_DATA">MM_DRVM_DATA</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_DRVM_ERROR">MM_DRVM_ERROR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_DRVM_OPEN">MM_DRVM_OPEN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_JOY1BUTTONDOWN">MM_JOY1BUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_JOY1BUTTONUP">MM_JOY1BUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_JOY1MOVE">MM_JOY1MOVE</td>
+        <td><p>See <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/dd757352.aspx">MM_JOY1MOVE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_JOY1ZMOVE">MM_JOY1ZMOVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_JOY2BUTTONDOWN">MM_JOY2BUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_JOY2BUTTONUP">MM_JOY2BUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_JOY2MOVE">MM_JOY2MOVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_JOY2ZMOVE">MM_JOY2ZMOVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MCINOTIFY">MM_MCINOTIFY</td>
+        <td><p>See <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/dd757358.aspx">MM_MCINOTIFY message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MCISIGNAL">MM_MCISIGNAL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIM_CLOSE">MM_MIM_CLOSE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIM_DATA">MM_MIM_DATA</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIM_ERROR">MM_MIM_ERROR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIM_LONGDATA">MM_MIM_LONGDATA</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIM_LONGERROR">MM_MIM_LONGERROR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIM_MOREDATA">MM_MIM_MOREDATA</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIM_OPEN">MM_MIM_OPEN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIXM_CONTROL_CHANGE">MM_MIXM_CONTROL_CHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MIXM_LINE_CHANGE">MM_MIXM_LINE_CHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MOM_CLOSE">MM_MOM_CLOSE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MOM_DONE">MM_MOM_DONE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MOM_OPEN">MM_MOM_OPEN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_MOM_POSITIONCB">MM_MOM_POSITIONCB</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_STREAM_CLOSE">MM_STREAM_CLOSE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_STREAM_DONE">MM_STREAM_DONE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_STREAM_ERROR">MM_STREAM_ERROR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_STREAM_OPEN">MM_STREAM_OPEN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_WIM_CLOSE">MM_WIM_CLOSE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_WIM_DATA">MM_WIM_DATA</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_WIM_OPEN">MM_WIM_OPEN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_WOM_CLOSE">MM_WOM_CLOSE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_WOM_DONE">MM_WOM_DONE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MM_WOM_OPEN">MM_WOM_OPEN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_MN_FIRST">MN_FIRST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ACTIVATE">WM_ACTIVATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ACTIVATEAPP">WM_ACTIVATEAPP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_AFXFIRST">WM_AFXFIRST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_AFXLAST">WM_AFXLAST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_APP">WM_APP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_APPCOMMAND">WM_APPCOMMAND</td>
+        <td><p>Notifies a window that the user generated an application command event, for example, by clicking an application command button using the mouse or typing an application command key on the keyboard.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms646275.aspx">WM_APPCOMMAND message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_APPLICATION_STRING">WM_APPLICATION_STRING</td>
+        <td><p>From this value to </p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ASKCBFORMATNAME">WM_ASKCBFORMATNAME</td>
+        <td><p>Sent to the clipboard owner by a clipboard viewer window to request the name of a CF_OWNERDISPLAY clipboard format.
+A window receives this message through its WindowProc function.
+See <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649018.aspx">WM_ASKCBFORMATNAME message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_BRIGHTNESSCHANGED">WM_BRIGHTNESSCHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_BSDRDATA">WM_BSDRDATA</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CANCELJOURNAL">WM_CANCELJOURNAL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CANCELMODE">WM_CANCELMODE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CAPTURECHANGED">WM_CAPTURECHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CHANGECBCHAIN">WM_CHANGECBCHAIN</td>
+        <td><p>Sent to the first window in the clipboard viewer chain when a window is being removed from the chain.
+A window receives this message through its WindowProc function.
+See <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649019.aspx">WM_CHANGECBCHAIN message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CHANGEUISTATE">WM_CHANGEUISTATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CHAR">WM_CHAR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CHARTOITEM">WM_CHARTOITEM</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CHILDACTIVATE">WM_CHILDACTIVATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CLEAR">WM_CLEAR</td>
+        <td><p>An application sends a WM_CLEAR message to an edit control or combo box to delete (clear) the current selection, if any, from the edit control.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649020.aspx">WM_CLEAR message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CLIPBOARDUPDATE">WM_CLIPBOARDUPDATE</td>
+        <td><p>See <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649021.aspx">WM_CLIPBOARDUPDATE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CLOSE">WM_CLOSE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_COMMAND">WM_COMMAND</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_COMMNOTIFY">WM_COMMNOTIFY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_COMPACTING">WM_COMPACTING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_COMPAREITEM">WM_COMPAREITEM</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CONTEXTMENU">WM_CONTEXTMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_COPY">WM_COPY</td>
+        <td><p>An application sends the WM_COPY message to an edit control or combo box to copy the current selection to the clipboard in CF_TEXT format.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649022.aspx">WM_COPY message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_COPYDATA">WM_COPYDATA</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CREATE">WM_CREATE</td>
+        <td><p>Sent when an application requests that a window be created by calling the CreateWindowEx or CreateWindow function. (The message is sent before the function returns.) The window procedure of the new window receives this message after the window is created, but before the window becomes visible.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms632619.aspx">WM_CREATE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CTLCOLORBTN">WM_CTLCOLORBTN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CTLCOLORDLG">WM_CTLCOLORDLG</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CTLCOLOREDIT">WM_CTLCOLOREDIT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CTLCOLORLISTBOX">WM_CTLCOLORLISTBOX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CTLCOLORMSGBOX">WM_CTLCOLORMSGBOX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CTLCOLORSCROLLBAR">WM_CTLCOLORSCROLLBAR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CTLCOLORSTATIC">WM_CTLCOLORSTATIC</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_CUT">WM_CUT</td>
+        <td><p>An application sends a WM_CUT message to an edit control or combo box to delete (cut) the current selection, if any, in the edit control and copy the deleted text to the clipboard in CF_TEXT format.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649023.aspx">WM_CUT message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DEADCHAR">WM_DEADCHAR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DELETEITEM">WM_DELETEITEM</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DESKTOPNOTIFY">WM_DESKTOPNOTIFY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DESTROY">WM_DESTROY</td>
+        <td><p>Sent when a window is being destroyed. It is sent to the window procedure of the window being destroyed after the window is removed from the screen.
+This message is sent first to the window being destroyed and then to the child windows (if any) as they are destroyed. During the processing of the message, it can be assumed that all child windows still exist.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms632620(v=vs.85).aspx">WM_DESTROY message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DESTROYCLIPBOARD">WM_DESTROYCLIPBOARD</td>
+        <td><p>Sent to the clipboard owner when a call to the EmptyClipboard function empties the clipboard.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649024.aspx">WM_DESTROYCLIPBOARD message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DEVICECHANGE">WM_DEVICECHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DEVMODECHANGE">WM_DEVMODECHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DISPLAYCHANGE">WM_DISPLAYCHANGE</td>
+        <td><p>See
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/dd145210.aspx">WM_DISPLAYCHANGE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DPICHANGED">WM_DPICHANGED</td>
+        <td><p>Sent when the effective dots per inch (dpi) for a window has changed. The DPI is the scale factor for a window. There are multiple events that can cause the DPI to change. The following list indicates the possible causes for the change in DPI.</p>
+<ul>
+<li>The window is moved to a new monitor that has a different DPI.</li>
+<li>The DPI of the monitor hosting the window changes.
+The current DPI for a window always equals the last DPI sent by WM_DPICHANGED.
+This is the scale factor that the window should be scaling to for threads that are aware of DPI changes.
+See <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/dn312083.aspx">WM_DPICHANGED message</a></li>
+</ul>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DRAWCLIPBOARD">WM_DRAWCLIPBOARD</td>
+        <td><p>Sent to the first window in the clipboard viewer chain when the content of the clipboard changes. This enables a clipboard viewer window to display the new content of the clipboard.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649025.aspx">WM_DRAWCLIPBOARD message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DRAWITEM">WM_DRAWITEM</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DROPFILES">WM_DROPFILES</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMCOLORIZATIONCOLORCHANGED">WM_DWMCOLORIZATIONCOLORCHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMCOMPOSITIONCHANGED">WM_DWMCOMPOSITIONCHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMEXILEFRAME">WM_DWMEXILEFRAME</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMNCRENDERINGCHANGED">WM_DWMNCRENDERINGCHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMSENDICONICLIVEPREVIEWBITMAP">WM_DWMSENDICONICLIVEPREVIEWBITMAP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMSENDICONICTHUMBNAIL">WM_DWMSENDICONICTHUMBNAIL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMTHUMBNAILSIZECHANGED">WM_DWMTHUMBNAILSIZECHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMTRANSITIONSTATECHANGED">WM_DWMTRANSITIONSTATECHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_DWMWINDOWMAXIMIZEDCHANGE">WM_DWMWINDOWMAXIMIZEDCHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ENABLE">WM_ENABLE</td>
+        <td><p>Sent when an application changes the enabled state of a window. It is sent to the window whose enabled state is changing. This message is sent before the EnableWindow function returns, but after the enabled state (WS_DISABLED style bit) of the window has changed.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms632621(v=vs.85).aspx">WM_ENABLE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ENDSESSION">WM_ENDSESSION</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ENTERIDLE">WM_ENTERIDLE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ENTERMENULOOP">WM_ENTERMENULOOP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ENTERSIZEMOVE">WM_ENTERSIZEMOVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ERASEBKGND">WM_ERASEBKGND</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_EXITMENULOOP">WM_EXITMENULOOP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_EXITPROCESS">WM_EXITPROCESS</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_EXITSIZEMOVE">WM_EXITSIZEMOVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_FLICK">WM_FLICK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_FLICKINTERNAL">WM_FLICKINTERNAL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_FONTCHANGE">WM_FONTCHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_FORWARDKEYDOWN">WM_FORWARDKEYDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_FORWARDKEYUP">WM_FORWARDKEYUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETACTIONTEXT">WM_GETACTIONTEXT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETDLGCODE">WM_GETDLGCODE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETFONT">WM_GETFONT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETHMENU">WM_GETHMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETHOTKEY">WM_GETHOTKEY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETICON">WM_GETICON</td>
+        <td><p>Sent to a window to retrieve a handle to the large or small icon associated with a window. The system displays the large icon in the ALT+TAB dialog, and the small icon in the window caption.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms632625.aspx">WM_GETICON message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETMINMAXINFO">WM_GETMINMAXINFO</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETOBJECT">WM_GETOBJECT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETTEXT">WM_GETTEXT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETTEXTLENGTH">WM_GETTEXTLENGTH</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_GETTITLEBARINFOEX">WM_GETTITLEBARINFOEX</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_HANDHELDFIRST">WM_HANDHELDFIRST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_HANDHELDLAST">WM_HANDHELDLAST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_HELP">WM_HELP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_HOOKMSG">WM_HOOKMSG</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_HOTKEY">WM_HOTKEY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_HSCROLL">WM_HSCROLL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_HSCROLLCLIPBOARD">WM_HSCROLLCLIPBOARD</td>
+        <td><p>Sent to the clipboard owner by a clipboard viewer window. This occurs when the clipboard contains data in the CF_OWNERDISPLAY format and an event occurs in the clipboard viewer&#39;s horizontal scroll bar. The owner should scroll the clipboard image and update the scroll bar values.
+See <a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649026.aspx">WM_HSCROLLCLIPBOARD message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ICONERASEBKGND">WM_ICONERASEBKGND</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_CHAR">WM_IME_CHAR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_COMPOSITION">WM_IME_COMPOSITION</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_COMPOSITIONFULL">WM_IME_COMPOSITIONFULL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_CONTROL">WM_IME_CONTROL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_ENDCOMPOSITION">WM_IME_ENDCOMPOSITION</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_KEYDOWN">WM_IME_KEYDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_KEYLAST">WM_IME_KEYLAST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_KEYUP">WM_IME_KEYUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_NOTIFY">WM_IME_NOTIFY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_REPORT">WM_IME_REPORT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_REQUEST">WM_IME_REQUEST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_SELECT">WM_IME_SELECT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_SETCONTEXT">WM_IME_SETCONTEXT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_IME_STARTCOMPOSITION">WM_IME_STARTCOMPOSITION</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_INITDIALOG">WM_INITDIALOG</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_INITMENU">WM_INITMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_INITMENUPOPUP">WM_INITMENUPOPUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_INPUT">WM_INPUT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_INPUT_DEVICE_CHANGE">WM_INPUT_DEVICE_CHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_INPUTLANGCHANGE">WM_INPUTLANGCHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_INPUTLANGCHANGEREQUEST">WM_INPUTLANGCHANGEREQUEST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_KEYBOARDCORRECTIONACTION">WM_KEYBOARDCORRECTIONACTION</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_KEYBOARDCORRECTIONCALLOUT">WM_KEYBOARDCORRECTIONCALLOUT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_KEYDOWN">WM_KEYDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_KEYFIRST">WM_KEYFIRST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_KEYLAST">WM_KEYLAST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_KEYUP">WM_KEYUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_KILLFOCUS">WM_KILLFOCUS</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_KLUDGEMINRECT">WM_KLUDGEMINRECT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_LBUTTONDBLCLK">WM_LBUTTONDBLCLK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_LBUTTONDOWN">WM_LBUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_LBUTTONUP">WM_LBUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_LPKDRAWSWITCHWND">WM_LPKDRAWSWITCHWND</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MAGNIFICATION_ENDED">WM_MAGNIFICATION_ENDED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MAGNIFICATION_OUTPUT">WM_MAGNIFICATION_OUTPUT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MAGNIFICATION_STARTED">WM_MAGNIFICATION_STARTED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MBUTTONDBLCLK">WM_MBUTTONDBLCLK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MBUTTONDOWN">WM_MBUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MBUTTONUP">WM_MBUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDIACTIVATE">WM_MDIACTIVATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDICASCADE">WM_MDICASCADE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDICREATE">WM_MDICREATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDIDESTROY">WM_MDIDESTROY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDIGETACTIVE">WM_MDIGETACTIVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDIICONARRANGE">WM_MDIICONARRANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDIMAXIMIZE">WM_MDIMAXIMIZE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDINEXT">WM_MDINEXT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDIREFRESHMENU">WM_MDIREFRESHMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDIRESTORE">WM_MDIRESTORE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDISETMENU">WM_MDISETMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MDITILE">WM_MDITILE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MEASURECONTROL">WM_MEASURECONTROL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MEASUREITEM">WM_MEASUREITEM</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MENUCHAR">WM_MENUCHAR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MENUCOMMAND">WM_MENUCOMMAND</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MENUDRAG">WM_MENUDRAG</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MENUGETOBJECT">WM_MENUGETOBJECT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MENURBUTTONUP">WM_MENURBUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MENUSELECT">WM_MENUSELECT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOUSEACTIVATE">WM_MOUSEACTIVATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOUSEFIRST">WM_MOUSEFIRST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOUSEHOVER">WM_MOUSEHOVER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOUSEHWHEEL">WM_MOUSEHWHEEL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOUSELEAVE">WM_MOUSELEAVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOUSEMOVE">WM_MOUSEMOVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOUSEWHEEL">WM_MOUSEWHEEL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOVE">WM_MOVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_MOVING">WM_MOVING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCACTIVATE">WM_NCACTIVATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCCALCSIZE">WM_NCCALCSIZE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCCREATE">WM_NCCREATE</td>
+        <td><p>Sent prior to the WM_CREATE message when a window is first created.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms632635.aspx">WM_NCCREATE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCDESTROY">WM_NCDESTROY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCHITTEST">WM_NCHITTEST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCLBUTTONDBLCLK">WM_NCLBUTTONDBLCLK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCLBUTTONDOWN">WM_NCLBUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCLBUTTONUP">WM_NCLBUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCMBUTTONDBLCLK">WM_NCMBUTTONDBLCLK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCMBUTTONDOWN">WM_NCMBUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCMBUTTONUP">WM_NCMBUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCMOUSEHOVER">WM_NCMOUSEHOVER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCMOUSELEAVE">WM_NCMOUSELEAVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCMOUSEMOVE">WM_NCMOUSEMOVE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCPAINT">WM_NCPAINT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCRBUTTONDBLCLK">WM_NCRBUTTONDBLCLK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCRBUTTONDOWN">WM_NCRBUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCRBUTTONUP">WM_NCRBUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCUAHDRAWCAPTION">WM_NCUAHDRAWCAPTION</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCUAHDRAWFRAME">WM_NCUAHDRAWFRAME</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCXBUTTONDBLCLK">WM_NCXBUTTONDBLCLK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCXBUTTONDOWN">WM_NCXBUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NCXBUTTONUP">WM_NCXBUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NEXTDLGCTL">WM_NEXTDLGCTL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NEXTMENU">WM_NEXTMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NOTIFY">WM_NOTIFY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NOTIFYFORMAT">WM_NOTIFYFORMAT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NOTIFYWOW">WM_NOTIFYWOW</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_NULL">WM_NULL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PAINT">WM_PAINT</td>
+        <td><p>The WM_PAINT message is sent when the system or another application makes a request to paint a portion of an application&#39;s window. The message is sent when the UpdateWindow or RedrawWindow function is called, or by the DispatchMessage function when the application obtains a WM_PAINT message by using the GetMessage or PeekMessage function.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/dd145213(v=vs.85).aspx">WM_PAINT message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PAINTCLIPBOARD">WM_PAINTCLIPBOARD</td>
+        <td><p>Sent to the clipboard owner by a clipboard viewer window when the clipboard contains data in the CF_OWNERDISPLAY format and the clipboard viewer&#39;s client area needs repainting.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649027.aspx">WM_PAINTCLIPBOARD message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PAINTICON">WM_PAINTICON</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PALETTECHANGED">WM_PALETTECHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PALETTEISCHANGING">WM_PALETTEISCHANGING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PARENTNOTIFY">WM_PARENTNOTIFY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PASTE">WM_PASTE</td>
+        <td><p>An application sends a WM_PASTE message to an edit control or combo box to copy the current content of the clipboard to the edit control at the current caret position. Data is inserted only if the clipboard contains data in CF_TEXT format.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649028.aspx">WM_PASTE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PENWINFIRST">WM_PENWINFIRST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PENWINLAST">WM_PENWINLAST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_POINTERDEVICEADDED">WM_POINTERDEVICEADDED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_POINTERDEVICEDELETED">WM_POINTERDEVICEDELETED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_POWER">WM_POWER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_POWERBROADCAST">WM_POWERBROADCAST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PRINT">WM_PRINT</td>
+        <td><p>The WM_PRINT message is sent to a window to request that it draw itself in the specified device context, most commonly in a printer device context.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/dd145216.aspx">WM_PRINT message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_PRINTCLIENT">WM_PRINTCLIENT</td>
+        <td><p>The WM_PRINTCLIENT message is sent to a window to request that it draw its client area in the specified device context, most commonly in a printer device context.
+Unlike WM_PRINT, WM_PRINTCLIENT is not processed by DefWindowProc. A window should process the WM_PRINTCLIENT message through an application-defined WindowProc function for it to be used properly.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/dd145217.aspx">WM_PRINTCLIENT message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_QUERYDRAGICON">WM_QUERYDRAGICON</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_QUERYENDSESSION">WM_QUERYENDSESSION</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_QUERYNEWPALETTE">WM_QUERYNEWPALETTE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_QUERYOPEN">WM_QUERYOPEN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_QUERYUISTATE">WM_QUERYUISTATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_QUEUESYNC">WM_QUEUESYNC</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_QUIT">WM_QUIT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_RASDIALEVENT">WM_RASDIALEVENT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_RBUTTONDBLCLK">WM_RBUTTONDBLCLK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_RBUTTONDOWN">WM_RBUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_RBUTTONUP">WM_RBUTTONUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_REFLECT">WM_REFLECT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_RENDERALLFORMATS">WM_RENDERALLFORMATS</td>
+        <td><p>Sent to the clipboard owner before it is destroyed, if the clipboard owner has delayed rendering one or more clipboard formats. For the content of the clipboard to remain available to other applications, the clipboard owner must render data in all the formats it is capable of generating, and place the data on the clipboard by calling the SetClipboardData function.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649029.aspx">WM_RENDERALLFORMATS message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_RENDERFORMAT">WM_RENDERFORMAT</td>
+        <td><p>Sent to the clipboard owner if it has delayed rendering a specific clipboard format and if an application has requested data in that format. The clipboard owner must render data in the specified format and place it on the clipboard by calling the SetClipboardData function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649030.aspx">WM_RENDERFORMAT message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_ROUTED_UI_EVENT">WM_ROUTED_UI_EVENT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SETCURSOR">WM_SETCURSOR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SETFOCUS">WM_SETFOCUS</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SETFONT">WM_SETFONT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SETHOTKEY">WM_SETHOTKEY</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SETICON">WM_SETICON</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SETREDRAW">WM_SETREDRAW</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SETTEXT">WM_SETTEXT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SETTINGCHANGE">WM_SETTINGCHANGE</td>
+        <td><p>A message that is sent to all top-level windows when the SystemParametersInfo function changes a system-wide setting or when policy settings have changed.
+Applications should send WM_SETTINGCHANGE to all top-level windows when they make changes to system parameters. (This message cannot be sent directly to a window.) To send the WM_SETTINGCHANGE message to all top-level windows, use the SendMessageTimeout function with the hwnd parameter set to HWND_BROADCAST.
+A window receives this message through its WindowProc function.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms725497(v=vs.85).aspx">WM_SETTINGCHANGE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SHOWWINDOW">WM_SHOWWINDOW</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SIZE">WM_SIZE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SIZECLIPBOARD">WM_SIZECLIPBOARD</td>
+        <td><p>Sent to the clipboard owner by a clipboard viewer window when the clipboard contains data in the CF_OWNERDISPLAY format and the clipboard viewer&#39;s client area has changed size.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649031.aspx">WM_SIZECLIPBOARD message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SIZING">WM_SIZING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SPOOLERSTATUS">WM_SPOOLERSTATUS</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_STYLECHANGED">WM_STYLECHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_STYLECHANGING">WM_STYLECHANGING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYNCPAINT">WM_SYNCPAINT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYNCTASK">WM_SYNCTASK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYSCHAR">WM_SYSCHAR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYSCOLORCHANGE">WM_SYSCOLORCHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYSCOMMAND">WM_SYSCOMMAND</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYSDEADCHAR">WM_SYSDEADCHAR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYSKEYDOWN">WM_SYSKEYDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYSKEYUP">WM_SYSKEYUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_SYSMENU">WM_SYSMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_TABLET_FIRST">WM_TABLET_FIRST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_TABLET_LAST">WM_TABLET_LAST</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_TCARD">WM_TCARD</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_THEMECHANGED">WM_THEMECHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_TIMECHANGE">WM_TIMECHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_TIMER">WM_TIMER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UAHDESTROYWINDOW">WM_UAHDESTROYWINDOW</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UAHDRAWMENU">WM_UAHDRAWMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UAHDRAWMENUITEM">WM_UAHDRAWMENUITEM</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UAHINIT">WM_UAHINIT</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UAHINITMENU">WM_UAHINITMENU</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UAHMEASUREMENUITEM">WM_UAHMEASUREMENUITEM</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UAHNCPAINTMENUPOPUP">WM_UAHNCPAINTMENUPOPUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UAHUPDATE">WM_UAHUPDATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UIACTION">WM_UIACTION</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UNDO">WM_UNDO</td>
+        <td><p>An application sends a WM_UNDO message to an edit control to undo the last operation. When this message is sent to an edit control, the previously deleted text is restored or the previously added text is deleted.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/bb761693.aspx">WM_UNDO message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UNICHAR">WM_UNICHAR</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UNINITMENUPOPUP">WM_UNINITMENUPOPUP</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_UPDATEUISTATE">WM_UPDATEUISTATE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_USER">WM_USER</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_USERCHANGED">WM_USERCHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_VKEYTOITEM">WM_VKEYTOITEM</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_VSCROLL">WM_VSCROLL</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_VSCROLLCLIPBOARD">WM_VSCROLLCLIPBOARD</td>
+        <td><p>Sent to the clipboard owner by a clipboard viewer window when the clipboard contains data in the CF_OWNERDISPLAY format and an event occurs in the clipboard viewer&#39;s vertical scroll bar. The owner should scroll the clipboard image and update the scroll bar values.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms649032.aspx">WM_VSCROLLCLIPBOARD message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_WAKETHREAD">WM_WAKETHREAD</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_WINDOWPOSCHANGED">WM_WINDOWPOSCHANGED</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_WINDOWPOSCHANGING">WM_WINDOWPOSCHANGING</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_WININICHANGE">WM_WININICHANGE</td>
+        <td><p>An application sends the WM_WININICHANGE message to all top-level windows after making a change to the WIN.INI file. The SystemParametersInfo function sends this message after an application uses the function to change a setting in WIN.INI.
+Note: The WM_WININICHANGE message is provided only for compatibility with earlier versions of the system. Applications should use the WM_SETTINGCHANGE message.
+<a href="https://msdn.microsoft.com/en-us/library/windows/desktop/ms725499(v=vs.85).aspx">M_WININICHANGE message</a></p>
+</td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_WTSSESSION_CHANGE">WM_WTSSESSION_CHANGE</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_XBUTTONDBLCLK">WM_XBUTTONDBLCLK</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_XBUTTONDOWN">WM_XBUTTONDOWN</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td id="Dapplo_Windows_Messages_WindowsMessages_WM_XBUTTONUP">WM_XBUTTONUP</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </thead></thead></table>
+</article>
+          </div>
+          
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/dapplo/Dapplo.Windows/new/master/apiSpec/new?filename=Dapplo_Windows_Messages_WindowsMessages.md&amp;value=---%0Auid%3A%20Dapplo.Windows.Messages.WindowsMessages%0Asummary%3A%20'*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax'%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Improve this Doc</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/dapplo/Dapplo.Windows/blob/master/src/Dapplo.Windows.Messages/WindowsMessages.cs/#L27" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+              <!-- <p><a class="back-to-top" href="#top">Back to top</a><p> -->
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+            Copyright © 2017 Dapplo
+            
+          </div>
+        </div>
+      </footer>
+    </div>
+    
+    <script type="text/javascript" src="../styles/docfx.vendor.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>
